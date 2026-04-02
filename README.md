@@ -12,8 +12,6 @@ A **production-grade Corrective Retrieval-Augmented Generation** system built wi
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Setup and Installation](#setup-and-installation)
-  - [Option A — Docker Compose (Recommended)](#option-a--docker-compose-recommended)
-  - [Option B — Local Development](#option-b--local-development)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
 - [How It Works — The Corrective RAG Pipeline](#how-it-works--the-corrective-rag-pipeline)
@@ -38,44 +36,56 @@ A **production-grade Corrective Retrieval-Augmented Generation** system built wi
 
 ### High-Level System Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         CLIENT (cURL / Postman / Frontend)         │
-│                                                                     │
-│           POST /upload (PDF)              POST /query (question)    │
-└────────────┬──────────────────────────────────┬─────────────────────┘
-             │                                  │
-             ▼                                  ▼
-┌────────────────────────────────────────────────────────────────────┐
-│                     FastAPI Application  (port 8000)               │
-│                                                                    │
-│  ┌──────────────┐    ┌──────────────────────────────────────────┐  │
-│  │  /upload      │    │  /query                                  │  │
-│  │              │    │                                          │  │
-│  │  PyPDFLoader │    │      ┌──────────────────────────┐       │  │
-│  │      ↓       │    │      │   LangGraph State Machine │       │  │
-│  │  TextSplitter│    │      │   (Corrective RAG Graph)  │       │  │
-│  │      ↓       │    │      └──────────────────────────┘       │  │
-│  │  HuggingFace │    │                                          │  │
-│  │  Embeddings  │    │                                          │  │
-│  │      ↓       │    │                                          │  │
-│  │  Qdrant      │    │                                          │  │
-│  │  Upsert      │    │                                          │  │
-│  └──────────────┘    └──────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────┘
-             │                                  │
-             ▼                                  ▼
-┌────────────────────────┐        ┌──────────────────────────┐
-│   Qdrant Vector DB     │        │   External Services      │
-│   (port 6333 / 6334)   │◄───────│                          │
-│                        │        │  • Groq LLM API          │
-│   Collection:          │        │    (Llama 3.3 70B)       │
-│   "knowledge_base"     │        │                          │
-│                        │        │  • Tavily Web Search API │
-│   Distance: Cosine     │        │                          │
-│   Dim: 384             │        │  • HuggingFace Embeddings│
-└────────────────────────┘        │    (all-MiniLM-L6-v2)   │
-                                  └──────────────────────────┘
+```mermaid
+graph TB
+    Client["Client -- cURL / Postman / Frontend"]
+
+    subgraph FastAPI["FastAPI Application :8000"]
+        Upload["/upload Endpoint"]
+        Query["/query Endpoint"]
+
+        subgraph Ingestion["Ingestion Pipeline"]
+            PDF["PyPDFLoader"] --> Splitter["RecursiveTextSplitter"]
+            Splitter --> Embed["HuggingFace Embeddings"]
+            Embed --> Upsert["Qdrant Upsert"]
+        end
+
+        subgraph RAG["Corrective RAG Graph -- LangGraph"]
+            Retrieve["Retrieve"] --> Grade["Grade Documents"]
+            Grade -->|Relevant| Generate["Generate Answer"]
+            Grade -->|Not Relevant| WebSearch["Tavily Web Search"]
+            WebSearch --> Generate
+            Generate --> Hallucination["Hallucination Check"]
+        end
+
+        Upload --> Ingestion
+        Query --> RAG
+    end
+
+    subgraph External["External Services"]
+        Groq["Groq LLM API -- Llama 3.3 70B"]
+        Tavily["Tavily Search API"]
+        HF["HuggingFace -- all-MiniLM-L6-v2"]
+    end
+
+    subgraph Storage["Qdrant Vector DB :6333"]
+        Collection["Collection: knowledge_base -- Cosine, 384-dim"]
+    end
+
+    Client -->|POST /upload PDF| Upload
+    Client -->|POST /query question| Query
+    Upsert --> Collection
+    Retrieve --> Collection
+    Grade --> Groq
+    Generate --> Groq
+    Hallucination --> Groq
+    WebSearch --> Tavily
+    Embed --> HF
+
+    style Client fill:#60a5fa,stroke:#2563eb,color:#000
+    style FastAPI fill:#1e293b,stroke:#334155,color:#e2e8f0
+    style Storage fill:#4ade80,stroke:#16a34a,color:#000
+    style External fill:#c084fc,stroke:#7c3aed,color:#000
 ```
 
 ### Corrective RAG — LangGraph Workflow
@@ -159,8 +169,7 @@ Before you begin, make sure you have the following:
 
 | Requirement | Version | Notes |
 |---|---|---|
-| **Docker and Docker Compose** | 20.x+ / 2.x+ | Required for Option A |
-| **Python** | 3.11+ | Required for Option B |
+| **Docker and Docker Compose** | 20.x+ / 2.x+ | Required to run the app |
 | **Groq API Key** | — | Sign up at [console.groq.com](https://console.groq.com) |
 | **Tavily API Key** | — | Sign up at [tavily.com](https://tavily.com) |
 | **Git** | 2.x+ | To clone the repository |
@@ -169,18 +178,16 @@ Before you begin, make sure you have the following:
 
 ## Setup and Installation
 
-### Option A — Docker Compose (Recommended)
+Docker Compose starts both the **FastAPI app** and the **Qdrant database** with a single command.
 
-This is the fastest path. Docker Compose starts both the **FastAPI app** and the **Qdrant database** with a single command.
-
-#### 1. Clone the Repository
+### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/Knowledge_Base.git
+git clone https://github.com/TkWarrior/Knowledge_Base.git
 cd Knowledge_Base
 ```
 
-#### 2. Configure Environment Variables
+### 2. Configure Environment Variables
 
 Create a `.env` file in the project root (or edit the existing one):
 
@@ -210,7 +217,7 @@ UPLOAD_DIR=uploads
 
 > **Warning:** Never commit your real API keys. The `.env` file is already in `.gitignore`.
 
-#### 3. Build and Start
+### 3. Build and Start
 
 ```bash
 docker compose up --build -d
@@ -222,7 +229,7 @@ This will:
 3. Start Qdrant on ports **6333** (HTTP) and **6334** (gRPC).
 4. Wait for Qdrant's health check to pass, then start the app on port **8000**.
 
-#### 4. Verify
+### 4. Verify
 
 ```bash
 # Check all containers are running
@@ -238,77 +245,16 @@ Expected response:
 {"status": "healthy", "service": "corrective-rag"}
 ```
 
-#### 5. Stop
+### 5. Open the Docs
+
+Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) for the interactive Swagger UI.
+
+### 6. Stop
 
 ```bash
 docker compose down          # Stop containers (data persists in volumes)
 docker compose down -v       # Stop containers AND delete vector data
 ```
-
----
-
-### Option B — Local Development
-
-Use this if you want to run the app directly on your machine for development or debugging.
-
-#### 1. Clone the Repository
-
-```bash
-git clone https://github.com/your-username/Knowledge_Base.git
-cd Knowledge_Base
-```
-
-#### 2. Start Qdrant
-
-You still need Qdrant running. The simplest way is with Docker:
-
-```bash
-docker run -d --name qdrant_db -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/storage qdrant/qdrant:latest
-```
-
-Alternatively, see the [Qdrant installation docs](https://qdrant.tech/documentation/guides/installation/) for other options.
-
-#### 3. Create a Virtual Environment
-
-```bash
-python -m venv .venv
-```
-
-Activate it:
-
-**Windows (PowerShell):**
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-**macOS / Linux:**
-```bash
-source .venv/bin/activate
-```
-
-#### 4. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-> **Note:** The first run will download the `all-MiniLM-L6-v2` embedding model (~80 MB). This only happens once.
-
-#### 5. Configure Environment Variables
-
-Create or edit the `.env` file as shown in [Option A, Step 2](#2-configure-environment-variables). Make sure `QDRANT_HOST` is set to `localhost`.
-
-#### 6. Run the Application
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-The `--reload` flag enables hot-reload so changes to the source files are picked up automatically.
-
-#### 7. Open the Docs
-
-Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) for the interactive Swagger UI.
 
 ---
 
