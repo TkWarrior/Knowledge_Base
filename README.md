@@ -2,12 +2,11 @@
 
 A **production-grade Corrective Retrieval-Augmented Generation** system built with a **React/Vite Frontend**, **FastAPI**, **LangGraph**, **Qdrant**, and **Groq**. Upload PDFs, ask questions, and receive grounded, hallucination-checked answers with automatic web-search fallback when local documents fall short.
 
-## Demo
+## Demo Video
 
-<video src="C:\Users\talibul haque\Downloads\Screen Recording - Apr 3, 2026 (1).mp4" controls="controls" muted="muted" width="100%">
-  Your browser does not support the video tag.
-</video>
+Click here to watch the demo video: 
 
+https://www.veed.io/view/b889b4eb-b023-4943-930e-01fa18cde68c?panel=share
 ---
 
 ## Table of Contents
