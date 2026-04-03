@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
@@ -14,14 +14,15 @@ logger = logging.getLogger(__name__)
 
 _embeddings = None
 
-def get_embeddings() -> HuggingFaceEmbeddings:
+def get_embeddings() -> GoogleGenerativeAIEmbeddings:
     global _embeddings
     if _embeddings is None:
         logger.info(f"Loading embedding model: {settings.embedding_model}")
-        _embeddings = HuggingFaceEmbeddings(
-            model_name=settings.embedding_model,
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True},
+        if not settings.google_api_key:
+            raise ValueError("GOOGLE_API_KEY is missing. Please add it to your config/environment.")
+        _embeddings = GoogleGenerativeAIEmbeddings(
+            model=settings.embedding_model,
+            google_api_key=settings.google_api_key,
         )
     return _embeddings
 
