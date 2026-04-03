@@ -1,7 +1,12 @@
 # Knowledge Base
 
-A **production-grade Corrective Retrieval-Augmented Generation** system built with **FastAPI**, **LangGraph**, **Qdrant**, and **Groq**. Upload PDFs, ask questions, and receive grounded, hallucination-checked answers with automatic web-search fallback when local documents fall short.
+A **production-grade Corrective Retrieval-Augmented Generation** system built with a **React/Vite Frontend**, **FastAPI**, **LangGraph**, **Qdrant**, and **Groq**. Upload PDFs, ask questions, and receive grounded, hallucination-checked answers with automatic web-search fallback when local documents fall short.
 
+## Demo Video
+
+Click here to watch the demo video: 
+
+https://www.veed.io/view/b889b4eb-b023-4943-930e-01fa18cde68c?panel=share
 ---
 
 ## Table of Contents
@@ -29,6 +34,7 @@ A **production-grade Corrective Retrieval-Augmented Generation** system built wi
 | **Web Search Fallback** | When local documents aren't relevant enough, Tavily web search seamlessly fills the gap. |
 | **Production Docker Setup** | One-command deployment with Docker Compose — Qdrant + FastAPI, health-checked and ready. |
 | **Fully Configurable** | All settings (model, temperature, embedding model, top-k, etc.) are driven from a single `.env` file. |
+| **Interactive Frontend** | A modern, responsive React + Vite + Tailwind CSS frontend for seamless interaction. |
 
 ---
 
@@ -38,7 +44,7 @@ A **production-grade Corrective Retrieval-Augmented Generation** system built wi
 
 ```mermaid
 graph TB
-    Client["Client -- cURL / Postman / Frontend"]
+    Client["Client -- React Frontend / cURL / Postman"]
 
     subgraph FastAPI["FastAPI Application :8000"]
         Upload["/upload Endpoint"]
@@ -46,7 +52,7 @@ graph TB
 
         subgraph Ingestion["Ingestion Pipeline"]
             PDF["PyPDFLoader"] --> Splitter["RecursiveTextSplitter"]
-            Splitter --> Embed["HuggingFace Embeddings"]
+            Splitter --> Embed["Nomic Embeddings"]
             Embed --> Upsert["Qdrant Upsert"]
         end
 
@@ -65,11 +71,11 @@ graph TB
     subgraph External["External Services"]
         Groq["Groq LLM API -- Llama 3.3 70B"]
         Tavily["Tavily Search API"]
-        HF["HuggingFace -- all-MiniLM-L6-v2"]
+        Nomic["Nomic -- nomic-embed-text-v1.5"]
     end
 
     subgraph Storage["Qdrant Vector DB :6333"]
-        Collection["Collection: knowledge_base -- Cosine, 384-dim"]
+        Collection["Collection: knowledge_base_nomic -- Cosine, 768-dim"]
     end
 
     Client -->|POST /upload PDF| Upload
@@ -80,7 +86,7 @@ graph TB
     Generate --> Groq
     Hallucination --> Groq
     WebSearch --> Tavily
-    Embed --> HF
+    Embed --> Nomic
 
     style Client fill:#60a5fa,stroke:#2563eb,color:#000
     style FastAPI fill:#1e293b,stroke:#334155,color:#e2e8f0
@@ -126,10 +132,11 @@ graph TD
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
+| **Frontend** | React 19 + Vite | Interactive upload and chat interface |
 | **API Framework** | FastAPI 0.115 | Async REST API with automatic OpenAPI docs |
 | **Orchestration** | LangGraph 0.4+ | Stateful, graph-based RAG workflow |
 | **LLM** | Groq (Llama 3.3 70B Versatile) | Ultra-fast inference for grading and generation |
-| **Embeddings** | HuggingFace `all-MiniLM-L6-v2` | Lightweight 384-dim sentence embeddings |
+| **Embeddings** | Nomic `nomic-embed-text-v1.5` | High-performance 768-dim sentence embeddings |
 | **Vector Store** | Qdrant | High-performance vector similarity search |
 | **Web Search** | Tavily API | Real-time web search fallback |
 | **PDF Parsing** | PyPDF | Robust PDF text extraction |
@@ -143,6 +150,7 @@ graph TD
 ```
 Knowledge_Base/
 │
+├── frontend/                     # React/Vite Frontend
 ├── app/                          # Application source code
 │   ├── main.py                   # FastAPI app — routes and middleware
 │   ├── config.py                 # Pydantic Settings (reads .env)
@@ -195,14 +203,15 @@ Create a `.env` file in the project root (or edit the existing one):
 # LLM and Search
 GROQ_API_KEY=gsk_your_groq_api_key_here
 TAVILY_API_KEY=tvly-your_tavily_api_key_here
+NOMIC_API_KEY=nk-your_nomic_api_key_here
 
 # Qdrant
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
 
 # Collection and Embeddings
-COLLECTION_NAME=knowledge_base
-EMBEDDING_MODEL=all-MiniLM-L6-v2
+COLLECTION_NAME=knowledge_base_nomic
+EMBEDDING_MODEL=nomic-embed-text-v1.5
 
 # LLM Settings
 LLM_MODEL=llama-3.3-70b-versatile
@@ -266,10 +275,11 @@ All configuration is managed through environment variables loaded via **Pydantic
 |---|---|---|
 | `GROQ_API_KEY` | (required) | API key for Groq LLM inference |
 | `TAVILY_API_KEY` | (required) | API key for Tavily web search fallback |
+| `NOMIC_API_KEY` | (required) | API key for Nomic embedding model |
 | `QDRANT_HOST` | `localhost` | Hostname of the Qdrant instance |
 | `QDRANT_PORT` | `6333` | HTTP port for Qdrant |
-| `COLLECTION_NAME` | `knowledge_base` | Qdrant collection to store document vectors |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | HuggingFace sentence-transformer model name |
+| `COLLECTION_NAME` | `knowledge_base_nomic` | Qdrant collection to store document vectors |
+| `EMBEDDING_MODEL` | `nomic-embed-text-v1.5` | Nomic sentence-transformer model name |
 | `LLM_MODEL` | `llama-3.3-70b-versatile` | Groq model identifier |
 | `LLM_TEMPERATURE` | `0.0` | Temperature for LLM generation (0 = deterministic) |
 | `TOP_K` | `5` | Default number of documents to retrieve |
@@ -311,7 +321,7 @@ curl -X POST http://localhost:8000/upload \
   "message": "PDF ingested successfully",
   "filename": "document.pdf",
   "chunks_ingested": 42,
-  "collection": "knowledge_base"
+  "collection": "knowledge_base_nomic"
 }
 ```
 
@@ -382,7 +392,7 @@ curl http://localhost:8000/collections
 {
   "collections": [
     {
-      "name": "knowledge_base",
+      "name": "knowledge_base_nomic",
       "vectors_count": 42,
       "points_count": 42
     }
@@ -421,5 +431,5 @@ This project is open-source. Feel free to use, modify, and distribute as needed.
 ---
 
 <p align="center">
-  Built with FastAPI, LangGraph, Qdrant, and Groq
+  Built with React, FastAPI, LangGraph, Qdrant, and Groq
 </p>
