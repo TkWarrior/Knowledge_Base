@@ -12,11 +12,11 @@ class Settings(BaseSettings):
     llm_model: str = "llama-3.3-70b-versatile"
     llm_temperature: float = 0.0
     tavily_api_key: str = ""
-    google_api_key: str = ""
+    nomic_api_key: str = ""
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
-    collection_name: str = "knowledge_base_gemini"
-    embedding_model: str = "models/text-embedding-004"
+    collection_name: str = "knowledge_base_nomic"
+    embedding_model: str = "nomic-embed-text-v1.5"
     top_k: int = 5
     upload_dir: str = "uploads"
 
